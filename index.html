@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>暗記帳</title>
+<script src="http://www.openjs.com/scripts/events/keyboard_shortcuts/shortcut.js"></script>
+<style>
+    h1{
+        background-color:#ff6530;
+    }
+    #ui{
+        position:fixed;
+        left:0px;
+        bottom:0px;
+    }
+    #questionList{
+        height:400px;
+        overflow-y:scroll;
+        background-color: #aaaaaa;
+    }
+    #searchList{
+        height:400px;
+        overflow-y:scroll;
+        background-color: #aaaaaa;
+    }
+    #bookList{
+        height:400px;
+        overflow-y:scroll;
+        background-color: #aaaaaa;
+    }
+    h2{
+        background-color:#dddddd;
+    }
+    #ctxmenu{
+        display:none;
+        position:fixed;
+        background-color:#ffffff;
+    }
+    #solveBox{
+        display:none;
+        position:fixed;
+        background-color:#ffffff;
+        border-color: black;
+        border:solid;
+        border-width:1px;
+    }
+    #closeBox{
+        position:absolute;
+        left:0px;
+        top:0px;
+    }
+    #solveSet{
+        position:absolute;
+        top:30px;
+    }
+</style>
+</head>
+<body>
+    <div id="ホーム">
+        <h1>暗記アプリへようこそ！</h1>
+        <h2>My問題集</h2>
+        <p>My問題集では、自分の問題集の閲覧、編集ができます。</p>
+        <p>My問題集の、問題集を作るを押すと、問題集が作られ、問題集編集画面へ移行します。</p>
+        <p>保存するを押すと、問題集を保存することができます。</p>
+        <p>また、My問題集から、任意の問題集をクリックすると、問題を解くことができます。</p>
+        <p>そして、任意の問題集を右クリックすることで、メニューが表示され、問題集の削除、編集、共有ができます。</p>
+    </div>
+    <div id="My問題集" style="display:none">
+        <div id="bookList"></div>
+        <button onclick="createBook()">問題集を作る</button>
+        <button onclick="createBookByFile()">問題集をファイルから開く</button>
+    </div>
+    <div id="問" style="display:none">
+        <div id="questionList">
+            <table id="editTable"></table>
+        </div>
+        <button onclick="saveQuestion()" id="save">問題を保存する</button>
+    </div>
+    <table id="ui">
+        <tr>
+            <td><button onclick="Display(this)">ホーム</button></td>
+            <td><button onclick="Display(this)">My問題集</button></td>
+        </tr>
+    </table>
+    <div id="ctxmenu">
+        <ul>
+            <li id="delete">delete</li>
+            <li id="edit">edit</li>
+            <li id="share">share</li>
+        </ul>
+    </div>
+    <div id="solveBox">
+        <div id="solveSet">
+            <p id="showQuestion"></p>
+            <p><input id="answerInput"/><button id="solveButton" onclick="solved()">回答</button></p>
+        </div>
+        <button id="closeBox" onclick="stopQuestion()">x</button>
+    </div>
+<script>
+//variables
+const main=document.getElementById("ホーム"),
+myBooks=document.getElementById("My問題集"),
+myQuestions=document.getElementById("問"),
+questionList=document.getElementById("questionList"),
+bookList=document.getElementById("bookList"),
+editTable=document.getElementById("editTable"),
+saveQ=document.getElementById("save");
+ctxmenu=document.getElementById("ctxmenu"),
+deleteButton=document.getElementById("delete"),
+editButton=document.getElementById("edit"),
+shareButton=document.getElementById("share"),
+showQuestion=document.getElementById("showQuestion"),
+solveBox=document.getElementById("solveBox"),
+solveButton=document.getElementById("solveButton"),
+closeBox=document.getElementById("closeBox"),
+answerInput=document.getElementById("answerInput");
+let bookArray=[],numOfBook,solveBoxState=0,countOfSolved,countOfQ,solveArr,answer;
+//socket.emit("upload",{question:"1+5=?",answer:"6"});
+//functons
+function Display(el){
+    main.style.display="none";
+    myQuestions.style.display="none";
+    myBooks.style.display="none";
+    document.getElementById(el.textContent).style.display="block";
+}
+function createBook(){  //re
+    const n=window.prompt("問題集の名前は?");
+    bookArray.push({name:n,questions:[]});
+    updateBookList();
+    editBook(bookArray.length-1);
+}
+function saveQuestion(){  //re
+    let e=numOfBook;
+    bookArray[e].questions=[];
+    for(let i=1;i<editTable.childElementCount;i++){
+        if(!(editTable.children[i].children[0].children[0].value==""||editTable.children[i].children[1].children[0].value==""))
+           bookArray[e].questions.push({question:editTable.children[i].children[0].children[0].value,answer:editTable.children[i].children[1].children[0].value});
+    }
+saveQ.textContent="問題を保存する(保存済み)";
+}
+
+function updateList(reset){  //re
+    let e=numOfBook;
+    if(reset)  //trueならquestionListのすべての要素を消す。問題集が変わるときに使う。
+        while(editTable.firstChild)
+            editTable.removeChild(editTable.firstChild);
+    let el=document.createElement("tr"),el1=document.createElement("td"),el2=document.createElement("td"),el3=document.createElement("p"),el4=document.createElement("p");
+    el3.textContent="question";
+    el4.textContent="answer";
+    el.appendChild(el1);
+    el.appendChild(el2);
+    el1.appendChild(el3);
+    el2.appendChild(el4);
+    editTable.appendChild(el);
+    for(let i=0;i<bookArray[e].questions.length;i++){
+    addQuestion(bookArray[e].questions[i].question,bookArray[e].questions[i].answer);
+    }
+    addQuestion("","");
+    saveQ.textContent="問題を保存する(保存済み)";
+}
+function addQuestion(q,a){
+    let el=document.createElement("tr"),el1=document.createElement("td"),el2=document.createElement("td"),el3=document.createElement("input"),el4=document.createElement("input");
+    el3.value=q;
+    el4.value=a;
+    el1.appendChild(el3);
+    el2.appendChild(el4);
+    el.appendChild(el1);
+    el.appendChild(el2);
+    editTable.appendChild(el);
+    el3.onchange=autoAddQ;
+    el4.onchange=autoAddQ;
+}
+function autoAddQ(){
+    if(!(editTable.lastChild.children[0].children[0].value==""&&editTable.lastChild.children[1].children[0].value=="")){
+        console.log(editTable.lastChild.children[0].children[0].value+" "+editTable.lastChild.children[1].children[0].value);
+        console.log(editTable.lastChild.children[0].value=="");
+        addQuestion("","");
+    }
+    saveQ.textContent="問題を保存する(未保存)";
+}
+function updateBookList(){  //re
+    while(bookList.children.length)
+        bookList.removeChild(bookList.firstChild);
+    for(let i=0;i<bookArray.length;i++){
+        let el=document.createElement("h2");
+        el.textContent=bookArray[i].name;
+        el.onclick=()=>{
+            numOfBook=i;
+            solveQuestion();
+        }
+        el.oncontextmenu=(e)=>{
+            ctxmenu.style.display="block";
+            ctxmenu.style.left=e.clientX+"px";
+            ctxmenu.style.top=e.clientY+"px";
+            deleteButton.onclick=()=>{
+                bookArray.splice(i,1);
+                updateBookList();
+                ctxmenu.style.display="none";
+            }
+            editButton.onclick=()=>{
+                editBook(i);
+                ctxmenu.style.display="none";
+            }
+            shareButton.onclick=()=>{
+                let blob=new Blob([JSON.stringify(bookArray[i])],{type:"text/plane"});
+                let url=URL.createObjectURL(blob);
+                let a=document.createElement("a");
+                a.download=bookArray[i].name+".json";
+                a.href=url;
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                ctxmenu.style.display="none";
+            }
+        }
+        bookList.appendChild(el);
+    } 
+}
+/*function solveQuestion(){
+    for(let i=0;i<Math.min(5,bookArray[numOfBook].questions.length);i++){
+        let q=bookArray[numOfBook].questions[Math.floor(Math.random()*bookArray[numOfBook].questions.length)];
+        let countOfSolved=0;
+        console.log(q);
+        if(window.prompt(q.question)==q.answer){
+            countOfSolved++;
+            window.alert("正解\n正解数："+countOfSolved+"/"+i+");
+        }else{
+            window.alert("不正解\n正解数："+countOfSolved+"/"+i+");
+            i--;
+        }
+    }
+}*/
+/*function solveQuestion(){
+    let countOfSolved=0,countOfQ=0,arr=[].concat(bookArray[numOfBook].questions);
+    for(let i=0;i<5&&arr.length;i++){
+        let rand=Math.floor(Math.random()*arr.length);
+        let q=arr[rand];
+        console.log(rand+" "+q+arr.length);
+        countOfQ++;
+        if(window.prompt(q.question)==q.answer){
+            countOfSolved++;
+            window.alert("正解\n正解数："+countOfSolved+"/"+countOfQ);
+        }else{
+            window.alert("不正解\n答えは"+q.answer+"\n正解数："+countOfSolved+"/"+countOfQ);
+            i--;
+        }
+        arr.splice(rand,1);
+    }
+}*/
+function solveQuestion(){
+    solveBox.style.width="600px";
+    solveBox.style.height="450px";
+    solveBox.style.left=window.innerWidth/2-parseInt(solveBox.style.width)/2+"px";
+    solveBox.style.top=window.innerHeight/2-parseInt(solveBox.style.height)/2+"px";
+    solveBox.style.display="block";
+    countOfSolved=0,countOfQ=0,solveArr=[].concat(bookArray[numOfBook].questions);
+    ask();
+}
+function ask(){
+    let rand=Math.floor(Math.random()*solveArr.length);
+    solveBoxState=1;
+    showQuestion.textContent=solveArr[rand].question;
+    answerInput.value="";
+    answer=solveArr[rand].answer;
+    solveArr.splice(rand,1);
+}
+function solved(){
+    switch(solveBoxState){
+        case 1:
+            if(answerInput.value==answer){
+                countOfSolved++;
+                showQuestion.textContent="正解!!";
+            }else
+                showQuestion.textContent="不正解…\n正解は"+answer;
+            countOfQ++;
+            if(solveArr.length)
+                solveBoxState=2;
+            else
+                solveBoxState=3;
+            break;
+        case 2:
+            ask();
+            break;
+        case 3:
+            stopQuestion();
+            break;
+    }
+}
+function stopQuestion(){
+    solveBox.style.display="none";
+    solveBoxState=false;
+}
+function createBookByFile(){
+    let input=document.createElement("input");
+    input.type="file";
+    input.accept="application/json";
+    input.click();
+    input.onchange=()=>{
+        let fr=new FileReader();
+        fr.onload=()=>{
+            bookArray.push(JSON.parse(fr.result));
+            console.log(fr.result);
+            updateBookList();
+        }
+        fr.readAsText(input.files[input.files.length-1]);
+    }
+}
+function editBook(num){
+    numOfBook=num;
+    Display({textContent:"問"});
+    updateList(true);
+}
+onbeforeunload=()=>{
+    localStorage.setItem("myQuestions",JSON.stringify(bookArray));
+}
+onload=()=>{
+    let q=JSON.parse(localStorage.getItem("myQuestions"));
+    if(q!=undefined){
+        bookArray=q;
+    }
+    updateBookList();
+}
+shortcut.add("Ctrl+S",saveQuestion);
+shortcut.add("Enter",()=>{
+    if(solveBoxState)
+        solved();
+});
+</script>
+</body>
+</html>
